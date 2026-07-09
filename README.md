@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # DS4 Battery Tray
 
 DS4 Battery Tray is a lightweight Windows 11 notification-area app that shows the battery level of a DualShock 4 controller connected over Bluetooth or USB.
@@ -99,4 +98,3 @@ MIT. See [LICENSE](LICENSE).
 =======
 # DS4BatteryLevel
 A simple Windows application to show the battery level of a DS4 controller connected via Bluetooth
->>>>>>> 74f98ad0da0c064bcdab7b065c76fe4c856625e5
