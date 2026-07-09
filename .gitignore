@@ -1,0 +1,22 @@
+# Local diagnostics
+status-check.txt
+DS4BatteryTray-diagnostics.txt
+ci-status.txt
+*.log
+
+# Build/debug output
+*.pdb
+*.user
+assets/app.ico
+bin/
+obj/
+
+# Temporary reference clones and experiments
+vendor-ds4windows/
+DS4BatteryTrayConsole.exe
+
+# Windows/editor noise
+Thumbs.db
+Desktop.ini
+.vs/
+.vscode/

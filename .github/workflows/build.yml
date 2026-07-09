@@ -1,0 +1,45 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build application
+        shell: powershell
+        run: .\Build.ps1
+
+      - name: Run one-shot diagnostics
+        shell: powershell
+        run: |
+          $process = Start-Process -FilePath .\DS4BatteryTray.exe -ArgumentList '--status-once','--status-file','.\ci-status.txt' -Wait -PassThru
+          if ($process.ExitCode -ne 0) {
+            exit $process.ExitCode
+          }
+          if (-not (Test-Path -LiteralPath .\ci-status.txt)) {
+            throw 'Diagnostics file was not created.'
+          }
+          Get-Content .\ci-status.txt
+
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: DS4BatteryTray
+          path: |
+            DS4BatteryTray.exe
+            Start-DS4BatteryTray.cmd
+            Install-Startup.cmd
+            Uninstall-Startup.cmd
+            README.md
+            LICENSE
+            docs/**

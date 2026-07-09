@@ -1,0 +1,48 @@
+name: Bug report
+description: Report a battery reading, startup, or tray behavior problem.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened?
+    validations:
+      required: true
+  - type: dropdown
+    id: connection
+    attributes:
+      label: Connection type
+      options:
+        - Bluetooth
+        - USB wired
+        - Both
+        - Not sure
+    validations:
+      required: true
+  - type: checkboxes
+    id: controller_tools
+    attributes:
+      label: Controller tools in use
+      options:
+        - label: HidHide
+        - label: ViGEm
+        - label: XOutput
+        - label: DS4Windows
+        - label: Steam Input
+        - label: Other mapper
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Paste output from Copy diagnostics or the --status-once command.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: List the exact steps that trigger the issue.
