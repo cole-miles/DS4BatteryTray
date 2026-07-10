@@ -22,6 +22,7 @@ Build with:
 
 ```powershell
 .\Build.ps1
+.\Test.ps1
 ```
 
 The project intentionally avoids external dependencies. Keep changes small, Windows-native, and compatible with a no-installer workflow.

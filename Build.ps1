@@ -3,7 +3,6 @@ $ErrorActionPreference = 'Stop'
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $csc = Join-Path $env:SystemRoot 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-$source = Join-Path $root 'src\DS4BatteryTray.cs'
 $output = Join-Path $root 'DS4BatteryTray.exe'
 $icon = Join-Path $root 'assets\app.ico'
 
@@ -84,7 +83,8 @@ $references = @(
     '/r:C:\Windows\Microsoft.NET\Framework64\v4.0.30319\System.Runtime.WindowsRuntime.dll'
 )
 
-& $csc /nologo /target:winexe /platform:x64 /optimize+ /win32icon:$icon /out:$output $references $source
+$sources = @(Get-ChildItem -LiteralPath (Join-Path $root 'src') -Filter '*.cs' -Recurse | ForEach-Object { $_.FullName })
+& $csc /nologo /target:winexe /platform:x64 /optimize+ /win32icon:$icon /out:$output $references $sources
 
 if ($LASTEXITCODE -ne 0) {
     throw "C# compiler failed with exit code $LASTEXITCODE"

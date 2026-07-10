@@ -19,6 +19,19 @@ jobs:
         shell: powershell
         run: .\Build.ps1
 
+      - name: Run unit tests
+        shell: powershell
+        run: .\Test.ps1
+
+      - name: Check documentation for conflict markers
+        shell: powershell
+        run: |
+          $conflicts = git grep -n -E '^(<<<<<<<|=======|>>>>>>>)' -- '*.md'
+          if ($conflicts) {
+            $conflicts
+            throw 'Unresolved merge-conflict markers found.'
+          }
+
       - name: Run one-shot diagnostics
         shell: powershell
         run: |

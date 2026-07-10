@@ -5,9 +5,11 @@ ci-status.txt
 *.log
 
 # Build/debug output
+DS4BatteryTray.exe
 *.pdb
 *.user
 assets/app.ico
+artifacts/
 bin/
 obj/
 

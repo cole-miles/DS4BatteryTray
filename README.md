@@ -1,102 +1,99 @@
-<<<<<<< HEAD
 # DS4 Battery Tray
 
-DS4 Battery Tray is a lightweight Windows 11 notification-area app that shows the battery level of a DualShock 4 controller connected over Bluetooth or USB.
+DS4 Battery Tray is a small, local-first Windows notification-area app that shows the battery state of a physical Sony DualShock 4 controller over Bluetooth or USB.
 
-It is designed for setups that use tools such as HidHide, ViGEm, XOutput, DS4Windows-style input stacks, and Xbox app games. The app reads the physical Sony controller, not the virtual Xbox controller.
+It is designed to coexist with HidHide, ViGEm, XOutput, Steam Input, and similar controller stacks. It reads the physical Sony controller rather than a virtual Xbox controller.
 
 ## Features
 
-- Live tray icon with battery fill and status color.
+- Live battery icon in the Windows notification area.
 - Bluetooth and wired USB DualShock 4 support.
-- Direct DS4 HID battery decoding when Windows does not expose a battery device.
-- Windows device battery API support when available.
-- Start with Windows toggle from the tray menu.
-- Low-battery notifications.
-- Copy or save diagnostics from the tray menu.
-- Quick links to Bluetooth settings, Windows Game Controllers, the app folder, and troubleshooting.
-- Single small executable, no installer, no service, no driver.
+- Windows battery API with direct HID fallback.
+- Automatic launch at Windows sign-in.
+- Low-battery and connection notifications.
+- Copyable and saveable diagnostics.
+- No installer, service, driver, account, telemetry, or network access.
 
-## Requirements
+## Compatibility
 
-- Windows 11, or Windows 10 with the same desktop APIs available.
-- Sony DualShock 4 controller.
-- Microsoft .NET Framework 4.x runtime, included with modern Windows installations.
-- Optional: HidHide whitelist entry for `DS4BatteryTray.exe` when HidHide is enabled.
+| Controller | Connection | Battery | Notes |
+| --- | --- | --- | --- |
+| DualShock 4 v1 | USB | Supported | Direct HID or Windows battery API |
+| DualShock 4 v1 | Bluetooth | Supported | HidHide whitelist may be required |
+| DualShock 4 v2 | USB | Supported | Direct HID or Windows battery API |
+| DualShock 4 v2 | Bluetooth | Supported | HidHide whitelist may be required |
+| Licensed DS4 variants | USB/Bluetooth | Best effort | Known Sony-compatible product IDs are included |
+| DualSense / DualSense Edge | USB/Bluetooth | Not yet supported | Planned as a separate controller profile |
 
-## Quick Start
+Windows 11 is the primary supported operating system. Windows 10 may work when the same desktop APIs are available.
 
-1. Download the repository or a release ZIP.
-2. Run `Start-DS4BatteryTray.cmd`.
-3. If HidHide is enabled, whitelist `DS4BatteryTray.exe`.
-4. Right-click the tray icon and enable `Start with Windows` if desired.
+## Install
 
-The tray icon color indicates status:
+1. Download the latest portable ZIP from [GitHub Releases](https://github.com/cole-miles/DS4BatteryLevel/releases/latest).
+2. Extract the complete ZIP to a permanent folder.
+3. Run `Start-DS4BatteryTray.cmd`.
+4. Right-click the tray icon and enable `Start with Windows`.
 
-- Green: more than 50%.
-- Yellow: 21-50%.
-- Red: 20% or lower.
-- Blue lightning bolt: charging.
-- Gray with an X: disconnected or unavailable.
+If HidHide is enabled, add the extracted `DS4BatteryTray.exe` to HidHide's application whitelist, apply the configuration, and restart the app.
 
-## HidHide, ViGEm, and XOutput
+The tray icon uses green, yellow, and red for charge level, blue for charging, and gray when the controller is unavailable. Windows may initially place it in the notification-area overflow menu.
 
-Whitelist this exact executable in HidHide:
+## Battery Precision
 
-```text
-DS4BatteryTray.exe
-```
+The app shows the best data the controller and Windows expose:
 
-The app intentionally ignores the ViGEm/XOutput virtual Xbox controller. It reads battery data from the physical DS4 HID device. If another application opens the physical controller exclusively, DS4 Battery Tray may not be able to read the direct HID report until that app releases or shares access.
+- The Windows battery API can provide a fine-grained percentage on some systems.
+- A direct DS4 HID report exposes coarse battery steps. Values such as 65% or 75% are midpoint estimates for those steps, not exact one-percent measurements.
 
-## Build From Source
+Diagnostics always identify the active source. This limitation comes from the controller report and cannot be improved by interpolating invented values.
 
-The project builds with the Windows .NET Framework compiler that ships with Windows:
+## Controller Tools
 
-```powershell
-.\Build.ps1
-```
+HidHide, ViGEm, and XOutput do affect device visibility. DS4 Battery Tray does not replace those tools and does not emulate an Xbox controller.
 
-The output is:
+- Whitelist the exact `DS4BatteryTray.exe` path in HidHide.
+- Keep the app in a permanent folder before enabling startup or adding the whitelist entry.
+- Another app may prevent direct battery reads if it opens the physical controller exclusively.
+- The virtual Xbox controller does not contain the DS4 battery report; the physical Sony HID device must remain visible to this app.
 
-```text
-DS4BatteryTray.exe
-```
-
-No NuGet restore is required.
+See [Troubleshooting](docs/TROUBLESHOOTING.md) for step-by-step checks.
 
 ## Diagnostics
 
-Use the tray menu:
-
-- `Copy diagnostics`
-- `Save diagnostics...`
-
-Or run:
+Use `Copy diagnostics` or `Save diagnostics...` from the tray menu, or run:
 
 ```powershell
 .\DS4BatteryTray.exe --status-once --status-file .\DS4BatteryTray-diagnostics.txt
 ```
 
-Diagnostics include connection state, decoded percentage, battery status, read source, and the low-level detail needed for troubleshooting.
+Include the generated output when reporting a controller-detection issue. It contains device state and errors, but no account credentials or network data.
+
+## Build and Test
+
+The project uses the .NET Framework compiler included with modern Windows and has no package restore:
+
+```powershell
+.\Build.ps1
+.\Test.ps1
+```
+
+`Build.ps1` creates `DS4BatteryTray.exe`. Generated executables are distributed through GitHub Releases rather than committed to source control.
 
 ## Documentation
 
-- [User Guide](docs/USER_GUIDE.md)
+- [User guide](docs/USER_GUIDE.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Development](docs/DEVELOPMENT.md)
-- [Release Checklist](docs/RELEASE.md)
+- [Release process](docs/RELEASE.md)
 - [Contributing](CONTRIBUTING.md)
-- [Security](SECURITY.md)
+- [Security policy](SECURITY.md)
 
-## Safety and Privacy
+## Roadmap
 
-DS4 Battery Tray does not collect telemetry, does not phone home, and does not install drivers or services. It reads local Windows device state and DS4 HID input reports only.
+Development is intentionally staged: modular battery/device services first, then DS4 light-bar control, DualSense support, and only then an optional Xbox-emulation backend. Emulation will remain optional so battery monitoring never requires a third-party driver.
 
-## License
+## Privacy and License
 
-MIT. See [LICENSE](LICENSE).
-=======
-# DS4BatteryLevel
-A simple Windows application to show the battery level of a DS4 controller connected via Bluetooth
->>>>>>> 74f98ad0da0c064bcdab7b065c76fe4c856625e5
+DS4 Battery Tray performs local device reads only. It does not collect telemetry or make network requests.
+
+Licensed under the [MIT License](LICENSE). Third-party GPL code, including DS4Windows implementation code, must not be copied into this project.

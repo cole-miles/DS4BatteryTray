@@ -51,3 +51,5 @@ The app reads battery state in this order:
 2. Direct DS4 HID input report.
 
 The HID fallback supports both USB-style reports and Bluetooth extended reports.
+
+Windows may expose a fine-grained percentage. The direct HID fallback exposes coarse controller steps, displayed as midpoint estimates such as 65% or 75%. Use diagnostics to see which source is active.
