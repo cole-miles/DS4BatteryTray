@@ -13,6 +13,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using DS4BatteryTray.Core.Battery;
 using Microsoft.Win32.SafeHandles;
 
 [assembly: AssemblyTitle("DS4 Battery Tray")]
@@ -537,6 +538,7 @@ namespace DS4BatteryTray
     {
         public bool Connected;
         public int? Percent;
+        public bool Approximate;
         public string BatteryStatus = "Unknown";
         public bool Charging;
         public string Message = "DS4 controller not connected";
@@ -561,6 +563,7 @@ namespace DS4BatteryTray
             StringBuilder builder = new StringBuilder();
             builder.AppendLine("Connected     : " + Connected);
             builder.AppendLine("Percent       : " + (Percent.HasValue ? Percent.Value.ToString() : ""));
+            builder.AppendLine("Approximate   : " + Approximate);
             builder.AppendLine("BatteryStatus : " + BatteryStatus);
             builder.AppendLine("Charging      : " + Charging);
             builder.AppendLine("Message       : " + Message);
@@ -701,14 +704,15 @@ namespace DS4BatteryTray
             BatteryState state = new BatteryState();
             state.Connected = true;
             state.Percent = hidResult.Percent;
+            state.Approximate = hidResult.Percent.HasValue;
             state.Charging = hidResult.Charging;
             state.BatteryStatus = String.IsNullOrWhiteSpace(hidResult.StatusText)
                 ? (hidResult.Charging ? "Charging" : "Discharging")
                 : hidResult.StatusText;
             state.Message = hidResult.Percent.HasValue
-                ? "DS4 battery " + hidResult.Percent.Value + "%"
+                ? "DS4 battery ~" + hidResult.Percent.Value + "%"
                 : "DS4 battery available";
-            state.Detail = hidResult.Detail;
+            state.Detail = hidResult.Detail + " Direct HID percentages are coarse controller-step estimates.";
             state.Error = hidResult.Error;
             state.Source = "Direct DS4 HID input report";
             return state;
@@ -911,7 +915,7 @@ namespace DS4BatteryTray
                 ds4Interfaces++;
                 result.FoundDevice = true;
 
-                HidBatteryReport report;
+                Ds4BatteryReport report;
                 string readError;
                 if (TryReadBatteryReport(devicePath, info.InputReportByteLength, info.OutputReportByteLength, out report, out readError))
                 {
@@ -1067,7 +1071,7 @@ namespace DS4BatteryTray
             }
         }
 
-        private static bool TryReadBatteryReport(string devicePath, int inputReportByteLength, int outputReportByteLength, out HidBatteryReport report, out string error)
+        private static bool TryReadBatteryReport(string devicePath, int inputReportByteLength, int outputReportByteLength, out Ds4BatteryReport report, out string error)
         {
             report = null;
             error = "";
@@ -1189,7 +1193,7 @@ namespace DS4BatteryTray
             return crc;
         }
 
-        private static bool TryReadInputReportViaControl(string devicePath, int reportLength, byte reportId, out HidBatteryReport report, out string error)
+        private static bool TryReadInputReportViaControl(string devicePath, int reportLength, byte reportId, out Ds4BatteryReport report, out string error)
         {
             report = null;
             error = "";
@@ -1218,11 +1222,11 @@ namespace DS4BatteryTray
                     return false;
                 }
 
-                return TryParseBatteryReport(buffer, buffer.Length, out report);
+                return Ds4BatteryReportParser.TryParse(buffer, buffer.Length, out report);
             }
         }
 
-        private static bool TryReadInputReportViaStream(string devicePath, int reportLength, out HidBatteryReport report, out string error)
+        private static bool TryReadInputReportViaStream(string devicePath, int reportLength, out Ds4BatteryReport report, out string error)
         {
             report = null;
             error = "";
@@ -1270,7 +1274,7 @@ namespace DS4BatteryTray
                     }
 
                     int bytesRead = stream.EndRead(asyncResult);
-                    if (TryParseBatteryReport(buffer, bytesRead, out report))
+                    if (Ds4BatteryReportParser.TryParse(buffer, bytesRead, out report))
                     {
                         return true;
                     }
@@ -1292,80 +1296,6 @@ namespace DS4BatteryTray
             return false;
         }
 
-        private static bool TryParseBatteryReport(byte[] buffer, int length, out HidBatteryReport report)
-        {
-            report = null;
-            if (buffer == null || length <= 0)
-            {
-                return false;
-            }
-
-            int powerIndex = -1;
-            string connectionKind = "unknown";
-
-            if (!HasMeaningfulPayload(buffer, length))
-            {
-                return false;
-            }
-
-            if (buffer[0] == 0x11 && length > 32)
-            {
-                powerIndex = 32;
-                connectionKind = "Bluetooth";
-            }
-            else if (buffer[0] == 0x01 && length > 30)
-            {
-                powerIndex = 30;
-                connectionKind = "USB-style";
-            }
-            else if (length > 32)
-            {
-                powerIndex = 32;
-                connectionKind = "Bluetooth-style";
-            }
-            else if (length > 30)
-            {
-                powerIndex = 30;
-                connectionKind = "USB-style";
-            }
-
-            if (powerIndex < 0)
-            {
-                return false;
-            }
-
-            byte power = buffer[powerIndex];
-            if (power == 0 && !HasNonZeroRange(buffer, length, Math.Max(1, powerIndex - 6), Math.Min(length, powerIndex + 7)))
-            {
-                return false;
-            }
-
-            int rawLevel = power & 0x0F;
-            if (rawLevel > 11)
-            {
-                return false;
-            }
-
-            HidBatteryReport batteryReport = new HidBatteryReport();
-            bool cableOrCharging = (power & 0x10) != 0;
-            if (rawLevel < 10)
-            {
-                batteryReport.Percent = rawLevel * 10 + 5;
-            }
-            else
-            {
-                batteryReport.Percent = 100;
-            }
-
-            batteryReport.Charging = cableOrCharging && rawLevel != 11;
-            batteryReport.StatusText = rawLevel == 11 ? "Full" : (batteryReport.Charging ? "Charging" : "Discharging");
-            batteryReport.PowerByte = power;
-            batteryReport.ReportId = buffer[0];
-            batteryReport.ConnectionKind = connectionKind;
-            report = batteryReport;
-            return true;
-        }
-
         private static string FormatSample(byte[] buffer, int length)
         {
             List<string> parts = new List<string>();
@@ -1379,33 +1309,6 @@ namespace DS4BatteryTray
             }
 
             return String.Join(" ", parts.ToArray());
-        }
-
-        private static bool HasMeaningfulPayload(byte[] buffer, int length)
-        {
-            int scanLength = Math.Min(length, 48);
-            for (int i = 1; i < scanLength; i++)
-            {
-                if (buffer[i] != 0)
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        private static bool HasNonZeroRange(byte[] buffer, int length, int start, int end)
-        {
-            for (int i = start; i < end && i < length; i++)
-            {
-                if (buffer[i] != 0)
-                {
-                    return true;
-                }
-            }
-
-            return false;
         }
 
         private static string LastWin32ErrorMessage()
@@ -1427,15 +1330,6 @@ namespace DS4BatteryTray
             public int OutputReportByteLength;
         }
 
-        private sealed class HidBatteryReport
-        {
-            public int Percent;
-            public bool Charging;
-            public byte PowerByte;
-            public byte ReportId;
-            public string ConnectionKind;
-            public string StatusText;
-        }
     }
 
     internal static class WinRtBatteryApi

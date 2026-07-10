@@ -1,0 +1,40 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Build and test
+        shell: powershell
+        run: |
+          .\Build.ps1
+          .\Test.ps1
+
+      - name: Package portable release
+        shell: powershell
+        run: |
+          $package = 'DS4BatteryTray-' + '${{ github.ref_name }}'
+          New-Item -ItemType Directory -Path ".\artifacts\$package" -Force | Out-Null
+          Copy-Item DS4BatteryTray.exe, Start-DS4BatteryTray.cmd, Install-Startup.cmd, Uninstall-Startup.cmd, README.md, LICENSE -Destination ".\artifacts\$package"
+          Copy-Item docs -Destination ".\artifacts\$package\docs" -Recurse
+          Compress-Archive -Path ".\artifacts\$package" -DestinationPath ".\artifacts\$package.zip"
+          $hash = (Get-FileHash ".\artifacts\$package.zip" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $package.zip" | Set-Content ".\artifacts\$package.zip.sha256" -Encoding ascii
+
+      - name: Publish GitHub release
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create '${{ github.ref_name }}' .\artifacts\*.zip .\artifacts\*.sha256 --generate-notes --verify-tag

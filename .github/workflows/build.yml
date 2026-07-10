@@ -1,6 +1,7 @@
 name: Build
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -13,11 +14,29 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Build application
         shell: powershell
         run: .\Build.ps1
+
+      - name: Run unit tests
+        shell: powershell
+        run: .\Test.ps1
+
+      - name: Check documentation for conflict markers
+        shell: powershell
+        run: |
+          $conflicts = @(git grep -n -E '^(<<<<<<<|=======|>>>>>>>)' -- '*.md')
+          $grepExitCode = $LASTEXITCODE
+          if ($grepExitCode -eq 0) {
+            $conflicts
+            throw 'Unresolved merge-conflict markers found.'
+          }
+          if ($grepExitCode -ne 1) {
+            throw "git grep failed with exit code $grepExitCode."
+          }
+          exit 0
 
       - name: Run one-shot diagnostics
         shell: powershell
@@ -32,7 +51,7 @@ jobs:
           Get-Content .\ci-status.txt
 
       - name: Upload executable
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: DS4BatteryTray
           path: |

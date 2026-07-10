@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Extracted DS4 battery report parsing into a testable core module.
+- Added deterministic USB, Bluetooth, charging, full, and invalid-report tests.
+- Added automated tagged GitHub Releases with portable ZIP and SHA-256 checksum.
+- Documented coarse direct-HID battery precision and the compatibility roadmap.
+- Removed generated executables from source-control policy.
+- Repaired README merge-conflict artifacts.
+
 ## 1.0.0
 
 - Initial public release.
