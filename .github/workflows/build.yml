@@ -51,7 +51,7 @@ jobs:
           Get-Content .\ci-status.txt
 
       - name: Upload executable
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: DS4BatteryTray
           path: |
