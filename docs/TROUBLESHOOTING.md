@@ -54,6 +54,21 @@ If the virtual Xbox controller works but battery is unavailable:
 2. Confirm XOutput is not using exclusive access.
 3. Start DS4 Battery Tray before XOutput as a test.
 
+## Light bar does not change
+
+1. Confirm the physical `DS4BatteryTray.exe` path is whitelisted in HidHide.
+2. Select `Static color...` and choose a visibly different color.
+3. Temporarily close tools that may own the physical controller or manage its light bar.
+4. Run a one-time write test:
+
+```powershell
+.\DS4BatteryTray.exe --lightbar-once '#FF0000' --status-file .\lightbar-check.txt
+```
+
+Check `Applied`, `Detail`, and `Error` in `lightbar-check.txt`. `Applied: True` confirms Windows accepted the output report; another app may still overwrite it afterward.
+
+If Steam Input, DS4Windows, or another tool should remain responsible for lighting, select `Light bar > Leave unchanged`.
+
 ## SmartScreen warning
 
 If you build or download an unsigned executable, Windows may show a SmartScreen prompt. This is expected for unsigned community builds. Review the source, build locally if preferred, and only run binaries you trust.
@@ -66,3 +81,6 @@ If you build or download an unsigned executable, Windows may show a SmartScreen 
 - `Source`: Windows battery API or direct DS4 HID input report.
 - `Detail`: low-level device/report detail.
 - `Error`: last read error if battery is unavailable.
+- `LightBarMode`: saved light-bar mode.
+- `LightBarDetail`: last successful write or waiting-state detail.
+- `LightBarError`: last light-bar write error.

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added DS4 light-bar control over USB and Bluetooth.
+- Added battery-following, static color, off, and leave-unchanged modes.
+- Added persistent current-user light-bar settings and a Windows color picker.
+- Added one-shot light-bar diagnostics and HID write details.
+- Added tested USB/Bluetooth report layouts and shared Bluetooth CRC handling.
 - Extracted DS4 battery report parsing into a testable core module.
 - Added deterministic USB, Bluetooth, charging, full, and invalid-report tests.
 - Added automated tagged GitHub Releases with portable ZIP and SHA-256 checksum.

@@ -14,16 +14,17 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using DS4BatteryTray.Core.Battery;
+using DS4BatteryTray.Core.Output;
 using Microsoft.Win32.SafeHandles;
 
 [assembly: AssemblyTitle("DS4 Battery Tray")]
-[assembly: AssemblyDescription("Windows tray app for DualShock 4 battery status over USB and Bluetooth.")]
+[assembly: AssemblyDescription("Windows tray app for DualShock 4 battery and light-bar status over USB and Bluetooth.")]
 [assembly: AssemblyCompany("Cole Miles")]
 [assembly: AssemblyProduct("DS4 Battery Tray")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 Cole Miles")]
 [assembly: ComVisible(false)]
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.1.0.0")]
+[assembly: AssemblyFileVersion("1.1.0.0")]
 
 namespace DS4BatteryTray
 {
@@ -66,6 +67,27 @@ namespace DS4BatteryTray
                     return;
                 }
 
+                if (!String.IsNullOrWhiteSpace(options.LightBarOnceColor))
+                {
+                    NativeMethods.AttachParentConsole();
+                    RgbColor color;
+                    if (!RgbColor.TryParse(options.LightBarOnceColor, out color))
+                    {
+                        throw new ArgumentException("Light-bar color must be a six-digit RGB value such as #0078D4.");
+                    }
+
+                    LightBarWriteResult result = DirectHidLightBarWriter.TryApply(color);
+                    string statusText = "Color         : " + color.ToHexString() + Environment.NewLine + result.ToStatusText();
+                    if (!String.IsNullOrWhiteSpace(options.StatusFile))
+                    {
+                        File.WriteAllText(options.StatusFile, statusText);
+                    }
+
+                    Console.WriteLine(statusText);
+                    Environment.ExitCode = result.Applied ? 0 : 2;
+                    return;
+                }
+
                 bool createdNew;
                 using (Mutex mutex = new Mutex(true, "Local\\DS4BatteryTray", out createdNew))
                 {
@@ -96,6 +118,7 @@ namespace DS4BatteryTray
         public bool StatusOnce;
         public string StatusFile;
         public string StartupDirectoryOverride;
+        public string LightBarOnceColor;
 
         public static CommandLineOptions Parse(string[] args)
         {
@@ -122,6 +145,10 @@ namespace DS4BatteryTray
                 else if (StringComparer.OrdinalIgnoreCase.Equals(arg, "--status-file") && i + 1 < args.Length)
                 {
                     options.StatusFile = args[++i];
+                }
+                else if (StringComparer.OrdinalIgnoreCase.Equals(arg, "--lightbar-once") && i + 1 < args.Length)
+                {
+                    options.LightBarOnceColor = args[++i];
                 }
                 else if ((StringComparer.OrdinalIgnoreCase.Equals(arg, "--startup-directory") ||
                           StringComparer.OrdinalIgnoreCase.Equals(arg, "-StartupDirectoryOverride")) &&
@@ -212,19 +239,31 @@ namespace DS4BatteryTray
 
     internal sealed class TrayApplicationContext : ApplicationContext
     {
+        private readonly ContextMenuStrip menu;
         private readonly NotifyIcon notifyIcon;
         private readonly ToolStripMenuItem statusItem;
         private readonly ToolStripMenuItem startupItem;
+        private readonly ToolStripMenuItem followBatteryLightBarItem;
+        private readonly ToolStripMenuItem staticColorLightBarItem;
+        private readonly ToolStripMenuItem offLightBarItem;
+        private readonly ToolStripMenuItem leaveLightBarUnchangedItem;
         private readonly System.Windows.Forms.Timer timer;
+        private readonly LightBarSettings lightBarSettings;
         private Icon currentIcon;
         private BatteryState lastState;
         private bool updating;
         private bool? previousConnected;
         private int lastLowBatteryNotificationBucket = -1;
+        private string lightBarSettingsError = "";
+        private string lastLightBarDetail = "";
+        private string lastLightBarError = "";
+        private string lastAppliedLightBarKey = "";
 
         public TrayApplicationContext()
         {
-            ContextMenuStrip menu = new ContextMenuStrip();
+            lightBarSettings = LightBarSettingsStore.Load(out lightBarSettingsError);
+
+            menu = new ContextMenuStrip();
             menu.Font = new Font("Segoe UI", 9.0f);
 
             statusItem = new ToolStripMenuItem("Checking DS4 battery...");
@@ -240,6 +279,27 @@ namespace DS4BatteryTray
                 ShowStateBalloon();
             };
             menu.Items.Add(refreshItem);
+
+            ToolStripMenuItem lightBarItem = new ToolStripMenuItem("Light bar");
+            followBatteryLightBarItem = new ToolStripMenuItem("Follow battery");
+            followBatteryLightBarItem.Click += async delegate { await SetLightBarModeAsync(LightBarMode.FollowBattery); };
+            lightBarItem.DropDownItems.Add(followBatteryLightBarItem);
+
+            staticColorLightBarItem = new ToolStripMenuItem("Static color...");
+            staticColorLightBarItem.Click += async delegate { await ChooseStaticLightBarColorAsync(); };
+            lightBarItem.DropDownItems.Add(staticColorLightBarItem);
+
+            offLightBarItem = new ToolStripMenuItem("Off");
+            offLightBarItem.Click += async delegate { await SetLightBarModeAsync(LightBarMode.Off); };
+            lightBarItem.DropDownItems.Add(offLightBarItem);
+            lightBarItem.DropDownItems.Add(new ToolStripSeparator());
+
+            leaveLightBarUnchangedItem = new ToolStripMenuItem("Leave unchanged");
+            leaveLightBarUnchangedItem.Click += async delegate { await SetLightBarModeAsync(LightBarMode.LeaveUnchanged); };
+            lightBarItem.DropDownItems.Add(leaveLightBarUnchangedItem);
+            lightBarItem.DropDownOpening += delegate { UpdateLightBarMenuState(); };
+            menu.Items.Add(lightBarItem);
+            menu.Items.Add(new ToolStripSeparator());
 
             ToolStripMenuItem bluetoothItem = new ToolStripMenuItem("Bluetooth settings");
             bluetoothItem.Click += delegate { OpenBluetoothSettings(); };
@@ -319,6 +379,7 @@ namespace DS4BatteryTray
             timer.Start();
 
             UpdateStartupMenuState();
+            UpdateLightBarMenuState();
         }
 
         protected override void Dispose(bool disposing)
@@ -329,6 +390,7 @@ namespace DS4BatteryTray
                 timer.Dispose();
                 notifyIcon.Visible = false;
                 notifyIcon.Dispose();
+                menu.Dispose();
                 if (currentIcon != null)
                 {
                     currentIcon.Dispose();
@@ -365,6 +427,7 @@ namespace DS4BatteryTray
                 statusItem.Text = state.Message;
                 UpdateStartupMenuState();
                 NotifyStateChanges(state);
+                await ApplyLightBarAsync(state, false, false);
             }
             finally
             {
@@ -387,6 +450,150 @@ namespace DS4BatteryTray
         private void UpdateStartupMenuState()
         {
             startupItem.Checked = StartupShortcut.IsEnabled(null);
+        }
+
+        private void UpdateLightBarMenuState()
+        {
+            followBatteryLightBarItem.Checked = lightBarSettings.Mode == LightBarMode.FollowBattery;
+            staticColorLightBarItem.Checked = lightBarSettings.Mode == LightBarMode.StaticColor;
+            offLightBarItem.Checked = lightBarSettings.Mode == LightBarMode.Off;
+            leaveLightBarUnchangedItem.Checked = lightBarSettings.Mode == LightBarMode.LeaveUnchanged;
+
+            Image oldImage = staticColorLightBarItem.Image;
+            staticColorLightBarItem.Image = CreateColorSwatch(lightBarSettings.StaticColor);
+            if (oldImage != null)
+            {
+                oldImage.Dispose();
+            }
+        }
+
+        private async Task ChooseStaticLightBarColorAsync()
+        {
+            using (ColorDialog dialog = new ColorDialog())
+            {
+                dialog.AllowFullOpen = true;
+                dialog.FullOpen = true;
+                dialog.SolidColorOnly = true;
+                dialog.Color = Color.FromArgb(
+                    lightBarSettings.StaticColor.Red,
+                    lightBarSettings.StaticColor.Green,
+                    lightBarSettings.StaticColor.Blue);
+
+                if (dialog.ShowDialog() != DialogResult.OK)
+                {
+                    return;
+                }
+
+                lightBarSettings.StaticColor = new RgbColor(dialog.Color.R, dialog.Color.G, dialog.Color.B);
+            }
+
+            await SetLightBarModeAsync(LightBarMode.StaticColor);
+        }
+
+        private async Task SetLightBarModeAsync(LightBarMode mode)
+        {
+            lightBarSettings.Mode = mode;
+            string saveError;
+            if (!LightBarSettingsStore.TrySave(lightBarSettings, out saveError))
+            {
+                lightBarSettingsError = saveError;
+                MessageBox.Show(saveError, AppInfo.Name, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            else
+            {
+                lightBarSettingsError = "";
+            }
+
+            lastAppliedLightBarKey = "";
+            UpdateLightBarMenuState();
+            await ApplyLightBarAsync(lastState, true, true);
+        }
+
+        private async Task ApplyLightBarAsync(BatteryState state, bool force, bool userInitiated)
+        {
+            if (lightBarSettings.Mode == LightBarMode.LeaveUnchanged)
+            {
+                lastAppliedLightBarKey = "";
+                lastLightBarDetail = "DS4 Battery Tray is not controlling the light bar.";
+                lastLightBarError = "";
+                if (userInitiated)
+                {
+                    notifyIcon.ShowBalloonTip(1800, AppInfo.Name, "Light bar left unchanged.", ToolTipIcon.Info);
+                }
+
+                return;
+            }
+
+            if (state == null || !state.Connected)
+            {
+                lastAppliedLightBarKey = "";
+                lastLightBarDetail = "Light-bar setting saved; waiting for a physical DS4 connection.";
+                lastLightBarError = "";
+                if (userInitiated)
+                {
+                    notifyIcon.ShowBalloonTip(2200, AppInfo.Name, lastLightBarDetail, ToolTipIcon.Info);
+                }
+
+                return;
+            }
+
+            RgbColor color = LightBarColorPolicy.Resolve(lightBarSettings, state.Percent, state.Charging);
+            string key = lightBarSettings.Mode + "|" + color.ToHexString();
+            if (!force && StringComparer.Ordinal.Equals(key, lastAppliedLightBarKey))
+            {
+                return;
+            }
+
+            LightBarWriteResult result;
+            try
+            {
+                result = await Task.Run(delegate
+                {
+                    return DirectHidLightBarWriter.TryApply(color);
+                });
+            }
+            catch (Exception ex)
+            {
+                lastLightBarDetail = "A physical DS4 light-bar update failed unexpectedly.";
+                lastLightBarError = ex.Message;
+                if (userInitiated)
+                {
+                    notifyIcon.ShowBalloonTip(2600, AppInfo.Name, lastLightBarError, ToolTipIcon.Warning);
+                }
+
+                return;
+            }
+
+            lastLightBarDetail = result.Detail;
+            lastLightBarError = result.Error;
+            if (result.Applied)
+            {
+                lastAppliedLightBarKey = key;
+            }
+
+            if (userInitiated)
+            {
+                notifyIcon.ShowBalloonTip(
+                    2600,
+                    AppInfo.Name,
+                    result.Applied ? result.Detail : (String.IsNullOrWhiteSpace(result.Error) ? result.Detail : result.Error),
+                    result.Applied ? ToolTipIcon.Info : ToolTipIcon.Warning);
+            }
+        }
+
+        private static Image CreateColorSwatch(RgbColor color)
+        {
+            Bitmap bitmap = new Bitmap(16, 16);
+            using (Graphics graphics = Graphics.FromImage(bitmap))
+            using (SolidBrush brush = new SolidBrush(Color.FromArgb(color.Red, color.Green, color.Blue)))
+            using (Pen border = new Pen(Color.FromArgb(96, 0, 0, 0)))
+            {
+                graphics.Clear(Color.Transparent);
+                graphics.FillRectangle(brush, 2, 2, 11, 11);
+                graphics.DrawRectangle(border, 2, 2, 11, 11);
+            }
+
+            return bitmap;
         }
 
         private void ShowStateBalloon()
@@ -458,7 +665,7 @@ namespace DS4BatteryTray
                 return;
             }
 
-            Clipboard.SetText(lastState.ToStatusText());
+            Clipboard.SetText(GetDiagnosticsText());
             notifyIcon.ShowBalloonTip(1500, AppInfo.Name, "Diagnostics copied to clipboard.", ToolTipIcon.Info);
         }
 
@@ -477,9 +684,20 @@ namespace DS4BatteryTray
 
                 if (dialog.ShowDialog() == DialogResult.OK)
                 {
-                    File.WriteAllText(dialog.FileName, lastState.ToStatusText());
+                    File.WriteAllText(dialog.FileName, GetDiagnosticsText());
                 }
             }
+        }
+
+        private string GetDiagnosticsText()
+        {
+            StringBuilder builder = new StringBuilder(lastState.ToStatusText());
+            builder.AppendLine("LightBarMode  : " + lightBarSettings.Mode);
+            builder.AppendLine("LightBarColor : " + lightBarSettings.StaticColor.ToHexString());
+            builder.AppendLine("LightBarDetail: " + lastLightBarDetail);
+            builder.AppendLine("LightBarError : " + lastLightBarError);
+            builder.AppendLine("SettingsError : " + lightBarSettingsError);
+            return builder.ToString();
         }
 
         private static void OpenBluetoothSettings()
@@ -525,9 +743,10 @@ namespace DS4BatteryTray
         {
             MessageBox.Show(
                 "DS4 Battery Tray" + Environment.NewLine +
-                "A lightweight Windows 11 tray app for DualShock 4 battery status." + Environment.NewLine +
+                "A lightweight Windows 11 companion for DualShock 4 battery and light-bar status." + Environment.NewLine +
                 Environment.NewLine +
-                "Supports wired USB and Bluetooth DS4 connections.",
+                "Supports wired USB and Bluetooth DS4 connections." + Environment.NewLine +
+                "Version 1.1.0",
                 AppInfo.Name,
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
@@ -907,7 +1126,7 @@ namespace DS4BatteryTray
                     continue;
                 }
 
-                if (info.VendorId != 0x054C || !Ds4ProductIds.Contains(info.ProductId))
+                if (!IsSupportedDs4(info))
                 {
                     continue;
                 }
@@ -951,7 +1170,12 @@ namespace DS4BatteryTray
             return result;
         }
 
-        private static IEnumerable<string> EnumerateHidDevicePaths()
+        internal static bool IsSupportedDs4(HidDeviceInfo info)
+        {
+            return info != null && info.VendorId == 0x054C && Ds4ProductIds.Contains(info.ProductId);
+        }
+
+        internal static IEnumerable<string> EnumerateHidDevicePaths()
         {
             Guid hidGuid = Guid.Empty;
             NativeMethods.HidD_GetHidGuid(ref hidGuid);
@@ -1015,7 +1239,7 @@ namespace DS4BatteryTray
             }
         }
 
-        private static bool TryGetHidDeviceInfo(string devicePath, out HidDeviceInfo info, out string error)
+        internal static bool TryGetHidDeviceInfo(string devicePath, out HidDeviceInfo info, out string error)
         {
             info = new HidDeviceInfo();
             error = "";
@@ -1146,7 +1370,7 @@ namespace DS4BatteryTray
                 byte[] outputReport = new byte[reportLength];
                 outputReport[0] = 0x11;
                 outputReport[1] = 0xC4;
-                WriteDs4BluetoothCrc(outputReport);
+                Ds4OutputCrc32.Write(outputReport);
 
                 if (!NativeMethods.HidD_SetOutputReport(handle, outputReport, outputReport.Length))
                 {
@@ -1156,41 +1380,6 @@ namespace DS4BatteryTray
 
                 return true;
             }
-        }
-
-        private static void WriteDs4BluetoothCrc(byte[] report)
-        {
-            uint crc = 0xFFFFFFFF;
-            crc = UpdateCrc32(crc, 0xA2);
-            for (int i = 0; i < report.Length - 4; i++)
-            {
-                crc = UpdateCrc32(crc, report[i]);
-            }
-
-            crc = ~crc;
-            int offset = report.Length - 4;
-            report[offset] = (byte)(crc & 0xFF);
-            report[offset + 1] = (byte)((crc >> 8) & 0xFF);
-            report[offset + 2] = (byte)((crc >> 16) & 0xFF);
-            report[offset + 3] = (byte)((crc >> 24) & 0xFF);
-        }
-
-        private static uint UpdateCrc32(uint crc, byte value)
-        {
-            crc ^= value;
-            for (int i = 0; i < 8; i++)
-            {
-                if ((crc & 1) != 0)
-                {
-                    crc = (crc >> 1) ^ 0xEDB88320;
-                }
-                else
-                {
-                    crc >>= 1;
-                }
-            }
-
-            return crc;
         }
 
         private static bool TryReadInputReportViaControl(string devicePath, int reportLength, byte reportId, out Ds4BatteryReport report, out string error)
@@ -1311,7 +1500,7 @@ namespace DS4BatteryTray
             return String.Join(" ", parts.ToArray());
         }
 
-        private static string LastWin32ErrorMessage()
+        internal static string LastWin32ErrorMessage()
         {
             int error = Marshal.GetLastWin32Error();
             if (error == 0)
@@ -1322,7 +1511,7 @@ namespace DS4BatteryTray
             return "Win32 " + error;
         }
 
-        private sealed class HidDeviceInfo
+        internal sealed class HidDeviceInfo
         {
             public int VendorId;
             public int ProductId;

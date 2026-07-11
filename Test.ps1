@@ -13,8 +13,8 @@ if (-not (Test-Path -LiteralPath $csc)) {
 New-Item -ItemType Directory -Path $outputDirectory -Force | Out-Null
 
 $sources = @(
-    (Join-Path $root 'src\Core\Battery\Ds4BatteryReportParser.cs'),
-    (Join-Path $root 'tests\Ds4BatteryReportParserTests.cs')
+    (Get-ChildItem -LiteralPath (Join-Path $root 'src\Core') -Filter '*.cs' -Recurse | ForEach-Object { $_.FullName })
+    (Get-ChildItem -LiteralPath (Join-Path $root 'tests') -Filter '*.cs' -Recurse | ForEach-Object { $_.FullName })
 )
 
 & $csc /nologo /target:exe /platform:anycpu /optimize+ /out:$output $sources
