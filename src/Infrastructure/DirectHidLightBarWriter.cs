@@ -106,7 +106,13 @@ namespace DS4BatteryTray
         {
             method = "";
             error = "";
-            int controlError;
+
+            string streamError;
+            if (TryWriteViaStream(devicePath, report, out streamError))
+            {
+                method = "HID stream write";
+                return true;
+            }
 
             using (SafeFileHandle handle = NativeMethods.CreateFile(
                 devicePath,
@@ -119,7 +125,7 @@ namespace DS4BatteryTray
             {
                 if (handle.IsInvalid)
                 {
-                    error = "Could not open DS4 HID output handle: " + DirectHidBatteryReader.LastWin32ErrorMessage();
+                    error = streamError + " Control-transfer fallback could not open the DS4 HID output handle: " + DirectHidBatteryReader.LastWin32ErrorMessage();
                     return false;
                 }
 
@@ -129,9 +135,14 @@ namespace DS4BatteryTray
                     return true;
                 }
 
-                controlError = Marshal.GetLastWin32Error();
+                error = streamError + " HidD_SetOutputReport fallback failed: Win32 " + Marshal.GetLastWin32Error() + ".";
+                return false;
             }
+        }
 
+        private static bool TryWriteViaStream(string devicePath, byte[] report, out string error)
+        {
+            error = "";
             SafeFileHandle streamHandle = NativeMethods.CreateFile(
                 devicePath,
                 NativeMethods.GENERIC_WRITE,
@@ -143,7 +154,7 @@ namespace DS4BatteryTray
 
             if (streamHandle.IsInvalid)
             {
-                error = "DS4 output write failed (HidD Win32 " + controlError + "; stream open: " + DirectHidBatteryReader.LastWin32ErrorMessage() + ").";
+                error = "HID stream open failed: " + DirectHidBatteryReader.LastWin32ErrorMessage() + ".";
                 streamHandle.Dispose();
                 return false;
             }
@@ -165,17 +176,16 @@ namespace DS4BatteryTray
                         {
                         }
 
-                        error = "DS4 output write timed out (HidD Win32 " + controlError + ").";
+                        error = "HID stream write timed out after 1500 ms.";
                         return false;
                     }
 
                     stream.EndWrite(asyncResult);
-                    method = "HID stream write";
                     return true;
                 }
                 catch (Exception ex)
                 {
-                    error = "DS4 output write failed (HidD Win32 " + controlError + "; stream: " + ex.Message + ").";
+                    error = "HID stream write failed: " + ex.Message + ".";
                     return false;
                 }
             }

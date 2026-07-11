@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fixed DS4 light-bar writes that Windows accepted but the controller ignored by preferring interrupt HID output over control-transfer fallback.
 - Added DS4 light-bar control over USB and Bluetooth.
 - Added battery-following, static color, off, and leave-unchanged modes.
 - Added persistent current-user light-bar settings and a Windows color picker.

@@ -67,6 +67,8 @@ If the virtual Xbox controller works but battery is unavailable:
 
 Check `Applied`, `Detail`, and `Error` in `lightbar-check.txt`. `Applied: True` confirms Windows accepted the output report; another app may still overwrite it afterward.
 
+Current builds should normally report `via HID stream write`. If diagnostics report only `HidD_SetOutputReport` and the color does not change, update to the latest build; some Windows HID stacks acknowledge that control transfer without applying the DS4 LED payload.
+
 If Steam Input, DS4Windows, or another tool should remain responsible for lighting, select `Light bar > Leave unchanged`.
 
 ## SmartScreen warning

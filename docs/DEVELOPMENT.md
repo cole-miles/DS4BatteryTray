@@ -46,7 +46,7 @@ One-shot light-bar write:
 - `DirectHidBatteryReader`: DS4 HID enumeration and report decoding.
 - `Core.Battery.Ds4BatteryReportParser`: transport-independent DS4 battery report parsing.
 - `Core.Output.Ds4LightBarReportBuilder`: USB/Bluetooth output report construction, color policy, and CRC.
-- `DirectHidLightBarWriter`: physical DS4 output transport with control-transfer and stream-write paths.
+- `DirectHidLightBarWriter`: physical DS4 output transport using timeout-safe interrupt writes with control-transfer fallback.
 - `LightBarSettingsStore`: current-user mode/color persistence under `HKCU\Software\ColeMiles\DS4BatteryTray`.
 - `TrayIconFactory`: dynamic tray icon rendering.
 
@@ -68,6 +68,8 @@ The output builder follows the upstream `hid-playstation` report structures:
 - Bluetooth CRC-32 occupies the final four bytes and uses output seed `0xA2`.
 
 Only the LED-valid flag is set. Motor/rumble fields are not marked valid, so a light-bar update does not intentionally alter rumble state.
+
+Windows may return success from `HidD_SetOutputReport` without applying a DS4 LED report. The writer therefore sends output through the HID interrupt/stream path first and uses `HidD_SetOutputReport` only as a compatibility fallback.
 
 ## Release build
 
