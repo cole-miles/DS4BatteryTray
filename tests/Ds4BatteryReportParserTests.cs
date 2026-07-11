@@ -15,10 +15,11 @@ namespace DS4BatteryTray.Tests
             TestRejectsInvalidLevel();
             TestRejectsEmptyReport();
             TestRejectsInvalidLength();
+            failures += Ds4LightBarReportBuilderTests.Run();
 
             if (failures == 0)
             {
-                Console.WriteLine("All DS4 battery parser tests passed.");
+                Console.WriteLine("All DS4 core protocol tests passed.");
                 return 0;
             }
 

@@ -1,5 +1,6 @@
 # Local diagnostics
 status-check.txt
+lightbar-check.txt
 DS4BatteryTray-diagnostics.txt
 ci-status.txt
 *.log

@@ -6,19 +6,22 @@ Before publishing a release:
 2. Build with `.\Build.ps1`.
 3. Test Bluetooth DS4 battery reading.
 4. Test USB DS4 battery reading.
-5. Test `Start with Windows`.
-6. Test HidHide whitelisting.
-7. Test `Copy diagnostics` and `Save diagnostics...`.
-8. Run one-shot diagnostics:
+5. Test static, battery-following, off, and leave-unchanged light-bar modes over USB.
+6. Test the same light-bar modes over Bluetooth.
+7. Test `Start with Windows`.
+8. Test HidHide whitelisting.
+9. Test `Copy diagnostics` and `Save diagnostics...`.
+10. Run one-shot diagnostics:
 
 ```powershell
 .\DS4BatteryTray.exe --status-once --status-file .\DS4BatteryTray-diagnostics.txt
 ```
 
-9. Remove diagnostic files.
-10. Update `CHANGELOG.md`.
-11. Create and push a signed or annotated `vX.Y.Z` tag.
-12. Confirm the GitHub release workflow publishes the ZIP and SHA-256 checksum.
+11. Run `--lightbar-once` over both USB and Bluetooth.
+12. Remove diagnostic files.
+13. Update `CHANGELOG.md`.
+14. Create and push a signed or annotated `vX.Y.Z` tag.
+15. Confirm the GitHub release workflow publishes the ZIP and SHA-256 checksum.
 
 The release workflow produces:
 
