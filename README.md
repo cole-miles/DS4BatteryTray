@@ -30,7 +30,7 @@ Windows 11 is the primary supported operating system. Windows 10 may work when t
 
 ## Install
 
-1. Download the latest portable ZIP from [GitHub Releases](https://github.com/cole-miles/DS4BatteryLevel/releases/latest).
+1. Download the latest portable ZIP from [GitHub Releases](https://github.com/cole-miles/DS4BatteryTray/releases/latest).
 2. Extract the complete ZIP to a permanent folder.
 3. Run `Start-DS4BatteryTray.cmd`.
 4. Right-click the tray icon and enable `Start with Windows`.
