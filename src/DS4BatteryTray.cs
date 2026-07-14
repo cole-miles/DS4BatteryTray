@@ -427,7 +427,7 @@ namespace DS4BatteryTray
                 statusItem.Text = state.Message;
                 UpdateStartupMenuState();
                 NotifyStateChanges(state);
-                await ApplyLightBarAsync(state, false, false);
+                await ApplyLightBarAsync(state, false);
             }
             finally
             {
@@ -506,10 +506,10 @@ namespace DS4BatteryTray
 
             lastAppliedLightBarKey = "";
             UpdateLightBarMenuState();
-            await ApplyLightBarAsync(lastState, true, true);
+            await ApplyLightBarAsync(lastState, true);
         }
 
-        private async Task ApplyLightBarAsync(BatteryState state, bool force, bool userInitiated)
+        private async Task ApplyLightBarAsync(BatteryState state, bool userInitiated)
         {
             if (lightBarSettings.Mode == LightBarMode.LeaveUnchanged)
             {
@@ -539,10 +539,6 @@ namespace DS4BatteryTray
 
             RgbColor color = LightBarColorPolicy.Resolve(lightBarSettings, state.Percent, state.Charging);
             string key = lightBarSettings.Mode + "|" + color.ToHexString();
-            if (!force && StringComparer.Ordinal.Equals(key, lastAppliedLightBarKey))
-            {
-                return;
-            }
 
             LightBarWriteResult result;
             try

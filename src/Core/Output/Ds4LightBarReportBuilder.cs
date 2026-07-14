@@ -213,5 +213,28 @@ namespace DS4BatteryTray.Core.Output
             Ds4OutputCrc32.Write(report);
             return report;
         }
+
+        public static byte[] CreateBluetoothHidWrite(RgbColor color, int outputReportByteLength)
+        {
+            if (outputReportByteLength < BluetoothReportLength)
+            {
+                throw new ArgumentOutOfRangeException(
+                    "outputReportByteLength",
+                    "A DS4 Bluetooth HID collection must accept at least the 78-byte protocol report.");
+            }
+
+            byte[] protocolReport = CreateBluetooth(color);
+            if (outputReportByteLength == protocolReport.Length)
+            {
+                return protocolReport;
+            }
+
+            // HidP caps describe the maximum output packet, not necessarily the
+            // DS4 protocol payload. Windows Bluetooth commonly reports 547 bytes.
+            // The DS4 packet and its CRC stay at offsets 0-77; HID padding follows.
+            byte[] hidWrite = new byte[outputReportByteLength];
+            Array.Copy(protocolReport, hidWrite, protocolReport.Length);
+            return hidWrite;
+        }
     }
 }
