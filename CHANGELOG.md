@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Improve DS4 Bluetooth light-bar delivery by using both Windows HID output paths.
+- Support Windows Bluetooth DS4 collections that require a 547-byte HID output buffer.
+- Reapply active light-bar settings during refreshes so controller mapping tools cannot leave a stale default color in place.
+
+## Unreleased
+
 - Fixed DS4 light-bar writes that Windows accepted but the controller ignored by preferring interrupt HID output over control-transfer fallback.
 - Added DS4 light-bar control over USB and Bluetooth.
 - Added battery-following, static color, off, and leave-unchanged modes.

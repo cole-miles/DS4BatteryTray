@@ -53,9 +53,10 @@ namespace DS4BatteryTray
                 result.FoundDevice = true;
                 byte[] report;
                 string connectionKind;
-                if (info.OutputReportByteLength == Ds4LightBarReportBuilder.BluetoothReportLength)
+                if (info.OutputReportByteLength >= Ds4LightBarReportBuilder.BluetoothReportLength &&
+                    info.InputReportByteLength >= Ds4LightBarReportBuilder.BluetoothReportLength)
                 {
-                    report = Ds4LightBarReportBuilder.CreateBluetooth(color);
+                    report = Ds4LightBarReportBuilder.CreateBluetoothHidWrite(color, info.OutputReportByteLength);
                     connectionKind = "Bluetooth";
                 }
                 else if (info.OutputReportByteLength == Ds4LightBarReportBuilder.UsbReportLength)
@@ -71,15 +72,17 @@ namespace DS4BatteryTray
 
                 string writeMethod;
                 string writeError;
-                if (TryWrite(devicePath, report, out writeMethod, out writeError))
+                if (TryWrite(devicePath, report, connectionKind == "Bluetooth", out writeMethod, out writeError))
                 {
                     result.Applied = true;
                     result.Detail = String.Format(
-                        "Set {0} DS4 light bar to {1} on PID 0x{2:X4} via {3}.",
+                        "Set {0} DS4 light bar to {1} on PID 0x{2:X4} via {3} (input {4} bytes, output {5} bytes).",
                         connectionKind,
                         color.ToHexString(),
                         info.ProductId,
-                        writeMethod);
+                        writeMethod,
+                        info.InputReportByteLength,
+                        info.OutputReportByteLength);
                     return result;
                 }
 
@@ -102,10 +105,15 @@ namespace DS4BatteryTray
             return result;
         }
 
-        private static bool TryWrite(string devicePath, byte[] report, out string method, out string error)
+        private static bool TryWrite(string devicePath, byte[] report, bool bluetooth, out string method, out string error)
         {
             method = "";
             error = "";
+
+            if (bluetooth)
+            {
+                return TryWriteBluetooth(devicePath, report, out method, out error);
+            }
 
             string streamError;
             if (TryWriteViaStream(devicePath, report, out streamError))
@@ -136,6 +144,65 @@ namespace DS4BatteryTray
                 }
 
                 error = streamError + " HidD_SetOutputReport fallback failed: Win32 " + Marshal.GetLastWin32Error() + ".";
+                return false;
+            }
+        }
+
+        private static bool TryWriteBluetooth(string devicePath, byte[] report, out string method, out string error)
+        {
+            method = "";
+            error = "";
+
+            // Windows Bluetooth adapters do not consistently route a DS4 output report
+            // through the same HID path. Prime the control path, then send the normal
+            // interrupt/stream report that Microsoft documents for ongoing output.
+            string controlError;
+            bool controlSucceeded = TryWriteViaControl(devicePath, report, out controlError);
+
+            string streamError;
+            bool streamSucceeded = TryWriteViaStream(devicePath, report, out streamError);
+            if (streamSucceeded)
+            {
+                method = controlSucceeded
+                    ? "Bluetooth HID control and stream writes"
+                    : "Bluetooth HID stream write";
+                return true;
+            }
+
+            if (controlSucceeded)
+            {
+                method = "Bluetooth HID control write";
+                return true;
+            }
+
+            error = controlError + " " + streamError;
+            return false;
+        }
+
+        private static bool TryWriteViaControl(string devicePath, byte[] report, out string error)
+        {
+            error = "";
+            using (SafeFileHandle handle = NativeMethods.CreateFile(
+                devicePath,
+                NativeMethods.GENERIC_WRITE,
+                NativeMethods.FILE_SHARE_READ | NativeMethods.FILE_SHARE_WRITE,
+                IntPtr.Zero,
+                NativeMethods.OPEN_EXISTING,
+                NativeMethods.FILE_ATTRIBUTE_NORMAL,
+                IntPtr.Zero))
+            {
+                if (handle.IsInvalid)
+                {
+                    error = "HID control open failed: " + DirectHidBatteryReader.LastWin32ErrorMessage() + ".";
+                    return false;
+                }
+
+                if (NativeMethods.HidD_SetOutputReport(handle, report, report.Length))
+                {
+                    return true;
+                }
+
+                error = "HidD_SetOutputReport failed: Win32 " + Marshal.GetLastWin32Error() + ".";
                 return false;
             }
         }

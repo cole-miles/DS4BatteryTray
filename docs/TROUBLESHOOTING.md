@@ -69,6 +69,19 @@ Check `Applied`, `Detail`, and `Error` in `lightbar-check.txt`. `Applied: True` 
 
 Current builds should normally report `via HID stream write`. If diagnostics report only `HidD_SetOutputReport` and the color does not change, update to the latest build; some Windows HID stacks acknowledge that control transfer without applying the DS4 LED payload.
 
+For Bluetooth, the app now sends both the HID control update and the HID stream update. Windows Bluetooth adapters vary in which path they route to the controller, while wired DS4 connections normally need only the stream update.
+
+Some Windows Bluetooth DS4 collections advertise a 547-byte maximum output report even though the DS4 protocol packet itself is 78 bytes. DS4 Battery Tray pads the HID write to the reported collection size while preserving the DS4 packet and CRC at their protocol offsets.
+
+## Another controller tool resets the light bar
+
+XOutput, Steam Input, DS4Windows, and other controller tools can send their own DS4 output reports. The last report sent controls the light bar, so their default color can overwrite the selected DS4 Battery Tray color.
+
+- Keep `DS4BatteryTray.exe` in the HidHide application whitelist.
+- Ensure the physical DS4 is not hidden from this app.
+- DS4 Battery Tray reapplies its selected light-bar state during each normal refresh (about every 15 seconds).
+- For immediate confirmation, choose `Light bar > Static color...` and select a clearly different color such as red.
+
 If Steam Input, DS4Windows, or another tool should remain responsible for lighting, select `Light bar > Leave unchanged`.
 
 ## SmartScreen warning
