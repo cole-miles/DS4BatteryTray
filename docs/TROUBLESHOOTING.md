@@ -69,6 +69,22 @@ Check `Applied`, `Detail`, and `Error` in `lightbar-check.txt`. `Applied: True` 
 
 If Steam Input, DS4Windows, or another tool should remain responsible for lighting, select `Light bar > Leave unchanged`.
 
+### Bluetooth with XOutput or another mapper
+
+The app never sends Bluetooth light-bar output as part of its battery refresh cycle. This protects the physical controller connection used by XOutput and other mappers.
+
+- A Bluetooth light-bar change is sent only when you explicitly choose a light-bar setting from the tray menu.
+- Bluetooth output uses the HID stream path only. The app does not use `HidD_SetOutputReport`, because that control-transfer path can interrupt controller emulation on some Windows Bluetooth stacks.
+- If an explicit light-bar change still interrupts emulation, select `Leave unchanged`; the mapper must own the physical controller's output in that configuration.
+
+The DS4 Bluetooth light-bar command is report `0x11`. Sending it changes the controller from its compact `0x01` input mode to extended `0x11` input mode. XOutput can use the compact mode but does not handle the extended mode in this configuration, so DS4 Battery Tray never sends direct Bluetooth light-bar output. This is a compatibility safeguard, not a HidHide setting issue.
+
+Use a USB data connection for light-bar control while charging, or leave the light bar to XOutput while playing wirelessly. Reconnect the controller and restart XOutput after a previous Bluetooth light-bar write so the DS4 returns to compact input mode.
+
+### Charging while playing over Bluetooth
+
+The app pauses automatic light-bar output whenever a Bluetooth DS4 interface is visible, including when a USB data interface is also present. When you explicitly choose a light-bar setting and USB is available, the app targets USB first so it does not send output to the Bluetooth controller path used by the mapper.
+
 ## SmartScreen warning
 
 If you build or download an unsigned executable, Windows may show a SmartScreen prompt. This is expected for unsigned community builds. Review the source, build locally if preferred, and only run binaries you trust.

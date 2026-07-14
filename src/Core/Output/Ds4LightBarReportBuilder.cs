@@ -213,5 +213,27 @@ namespace DS4BatteryTray.Core.Output
             Ds4OutputCrc32.Write(report);
             return report;
         }
+
+        public static byte[] CreateBluetoothHidWrite(RgbColor color, int outputReportByteLength)
+        {
+            if (outputReportByteLength < BluetoothReportLength)
+            {
+                throw new ArgumentOutOfRangeException(
+                    "outputReportByteLength",
+                    "A DS4 Bluetooth HID collection must accept at least the 78-byte protocol report.");
+            }
+
+            byte[] protocolReport = CreateBluetooth(color);
+            if (outputReportByteLength == protocolReport.Length)
+            {
+                return protocolReport;
+            }
+
+            // Windows Bluetooth commonly reports a 547-byte HID buffer even
+            // though the DS4 protocol packet remains 78 bytes, CRC included.
+            byte[] hidWrite = new byte[outputReportByteLength];
+            Array.Copy(protocolReport, hidWrite, protocolReport.Length);
+            return hidWrite;
+        }
     }
 }

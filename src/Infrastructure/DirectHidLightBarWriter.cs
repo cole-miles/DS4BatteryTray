@@ -29,6 +29,8 @@ namespace DS4BatteryTray
         {
             LightBarWriteResult result = new LightBarWriteResult();
             List<string> failures = new List<string>();
+            List<LightBarCandidate> usbCandidates = new List<LightBarCandidate>();
+            List<LightBarCandidate> bluetoothCandidates = new List<LightBarCandidate>();
 
             foreach (string devicePath in DirectHidBatteryReader.EnumerateHidDevicePaths())
             {
@@ -51,17 +53,15 @@ namespace DS4BatteryTray
                 }
 
                 result.FoundDevice = true;
-                byte[] report;
-                string connectionKind;
-                if (info.OutputReportByteLength == Ds4LightBarReportBuilder.BluetoothReportLength)
+                bool bluetooth = info.InputReportByteLength >= Ds4LightBarReportBuilder.BluetoothReportLength &&
+                    info.OutputReportByteLength >= Ds4LightBarReportBuilder.BluetoothReportLength;
+                if (bluetooth)
                 {
-                    report = Ds4LightBarReportBuilder.CreateBluetooth(color);
-                    connectionKind = "Bluetooth";
+                    bluetoothCandidates.Add(new LightBarCandidate(devicePath, info, true));
                 }
                 else if (info.OutputReportByteLength == Ds4LightBarReportBuilder.UsbReportLength)
                 {
-                    report = Ds4LightBarReportBuilder.CreateUsb(color);
-                    connectionKind = "USB";
+                    usbCandidates.Add(new LightBarCandidate(devicePath, info, false));
                 }
                 else
                 {
@@ -69,17 +69,19 @@ namespace DS4BatteryTray
                     continue;
                 }
 
-                string writeMethod;
+            }
+
+            // A DS4 can expose USB while also paired over Bluetooth, such as when a
+            // data-capable charging cable is attached. Prefer USB for a manual
+            // light-bar change so the Bluetooth mapper session is left alone.
+            foreach (LightBarCandidate candidate in usbCandidates)
+            {
+                string detail;
                 string writeError;
-                if (TryWrite(devicePath, report, out writeMethod, out writeError))
+                if (TryApplyToCandidate(candidate, color, out detail, out writeError))
                 {
                     result.Applied = true;
-                    result.Detail = String.Format(
-                        "Set {0} DS4 light bar to {1} on PID 0x{2:X4} via {3}.",
-                        connectionKind,
-                        color.ToHexString(),
-                        info.ProductId,
-                        writeMethod);
+                    result.Detail = detail;
                     return result;
                 }
 
@@ -87,6 +89,11 @@ namespace DS4BatteryTray
                 {
                     failures.Add(writeError);
                 }
+            }
+
+            if (bluetoothCandidates.Count > 0)
+            {
+                failures.Add("Direct Bluetooth light-bar output is disabled because it changes the DS4 input-report mode and can interrupt controller mappers such as XOutput. Connect a USB data cable to control the light bar safely.");
             }
 
             result.Error = String.Join(" ", failures.ToArray());
@@ -102,10 +109,47 @@ namespace DS4BatteryTray
             return result;
         }
 
-        private static bool TryWrite(string devicePath, byte[] report, out string method, out string error)
+        private static bool TryApplyToCandidate(LightBarCandidate candidate, RgbColor color, out string detail, out string error)
+        {
+            detail = "";
+            error = "";
+            byte[] report = candidate.Bluetooth
+                ? Ds4LightBarReportBuilder.CreateBluetoothHidWrite(color, candidate.Info.OutputReportByteLength)
+                : Ds4LightBarReportBuilder.CreateUsb(color);
+
+            string writeMethod;
+            if (!TryWrite(candidate.DevicePath, report, candidate.Bluetooth, out writeMethod, out error))
+            {
+                return false;
+            }
+
+            detail = String.Format(
+                "Set {0} DS4 light bar to {1} on PID 0x{2:X4} via {3}.",
+                candidate.Bluetooth ? "Bluetooth" : "USB",
+                color.ToHexString(),
+                candidate.Info.ProductId,
+                writeMethod);
+            return true;
+        }
+
+        private static bool TryWrite(string devicePath, byte[] report, bool bluetooth, out string method, out string error)
         {
             method = "";
             error = "";
+
+            string streamError;
+            if (TryWriteViaStream(devicePath, report, out streamError))
+            {
+                method = "HID stream write";
+                return true;
+            }
+
+            if (bluetooth)
+            {
+                error = streamError + " Bluetooth DS4 output does not use HidD_SetOutputReport because it can interrupt controller mappers.";
+                return false;
+            }
+
             int controlError;
 
             using (SafeFileHandle handle = NativeMethods.CreateFile(
@@ -132,6 +176,13 @@ namespace DS4BatteryTray
                 controlError = Marshal.GetLastWin32Error();
             }
 
+            error = streamError + " HidD_SetOutputReport fallback failed: Win32 " + controlError + ".";
+            return false;
+        }
+
+        private static bool TryWriteViaStream(string devicePath, byte[] report, out string error)
+        {
+            error = "";
             SafeFileHandle streamHandle = NativeMethods.CreateFile(
                 devicePath,
                 NativeMethods.GENERIC_WRITE,
@@ -143,7 +194,7 @@ namespace DS4BatteryTray
 
             if (streamHandle.IsInvalid)
             {
-                error = "DS4 output write failed (HidD Win32 " + controlError + "; stream open: " + DirectHidBatteryReader.LastWin32ErrorMessage() + ").";
+                error = "HID stream open failed: " + DirectHidBatteryReader.LastWin32ErrorMessage() + ".";
                 streamHandle.Dispose();
                 return false;
             }
@@ -165,19 +216,32 @@ namespace DS4BatteryTray
                         {
                         }
 
-                        error = "DS4 output write timed out (HidD Win32 " + controlError + ").";
+                        error = "HID stream write timed out after 1500 ms.";
                         return false;
                     }
 
                     stream.EndWrite(asyncResult);
-                    method = "HID stream write";
                     return true;
                 }
                 catch (Exception ex)
                 {
-                    error = "DS4 output write failed (HidD Win32 " + controlError + "; stream: " + ex.Message + ").";
+                    error = "HID stream write failed: " + ex.Message + ".";
                     return false;
                 }
+            }
+        }
+
+        private sealed class LightBarCandidate
+        {
+            public readonly string DevicePath;
+            public readonly DirectHidBatteryReader.HidDeviceInfo Info;
+            public readonly bool Bluetooth;
+
+            public LightBarCandidate(string devicePath, DirectHidBatteryReader.HidDeviceInfo info, bool bluetooth)
+            {
+                DevicePath = devicePath;
+                Info = info;
+                Bluetooth = bluetooth;
             }
         }
     }

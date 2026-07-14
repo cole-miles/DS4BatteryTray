@@ -45,6 +45,13 @@ namespace DS4BatteryTray.Tests
             failures += AssertEqual((byte)0x00, report[7], "Bluetooth left motor remains zero");
             failures += AssertEqual(0x3E27F97Cu, ReadLittleEndianUInt32(report, 74), "Bluetooth CRC known vector");
             failures += AssertEqual(0x3E27F97Cu, Ds4OutputCrc32.Compute(report), "Bluetooth CRC computation");
+
+            byte[] paddedWrite = Ds4LightBarReportBuilder.CreateBluetoothHidWrite(new RgbColor(0x12, 0x34, 0x56), 547);
+            failures += AssertEqual(547, paddedWrite.Length, "Bluetooth HID write uses collection output length");
+            failures += AssertEqual((byte)0x11, paddedWrite[0], "Bluetooth HID write retains report ID");
+            failures += AssertEqual((byte)0x12, paddedWrite[8], "Bluetooth HID write retains red offset");
+            failures += AssertEqual(0x3E27F97Cu, ReadLittleEndianUInt32(paddedWrite, 74), "Bluetooth HID write retains protocol CRC offset");
+            failures += AssertEqual((byte)0x00, paddedWrite[78], "Bluetooth HID write pads after protocol report");
             return failures;
         }
 

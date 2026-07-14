@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Prevent Bluetooth light-bar refreshes from interrupting XOutput and other controller mappers.
+- Use stream-only Bluetooth output and support 547-byte Bluetooth HID write buffers.
+- Block direct Bluetooth light-bar writes to preserve XOutput-compatible DS4 input mode; use USB output when a data cable is present.
 - Added DS4 light-bar control over USB and Bluetooth.
 - Added battery-following, static color, off, and leave-unchanged modes.
 - Added persistent current-user light-bar settings and a Windows color picker.

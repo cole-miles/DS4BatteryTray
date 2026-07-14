@@ -8,6 +8,7 @@ namespace DS4BatteryTray.Core.Battery
         public bool Charging;
         public byte PowerByte;
         public byte ReportId;
+        public bool UsesExtendedBluetoothInput;
         public string ConnectionKind;
         public string StatusText;
     }
@@ -68,6 +69,7 @@ namespace DS4BatteryTray.Core.Battery
             report.StatusText = rawLevel == 11 ? "Full" : (report.Charging ? "Charging" : "Discharging");
             report.PowerByte = power;
             report.ReportId = buffer[0];
+            report.UsesExtendedBluetoothInput = buffer[0] == 0x11;
             report.ConnectionKind = connectionKind;
             return true;
         }

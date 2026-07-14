@@ -537,6 +537,13 @@ namespace DS4BatteryTray
                 return;
             }
 
+            if (!userInitiated && DirectHidBatteryReader.HasBluetoothDs4Interface())
+            {
+                lastLightBarDetail = "Automatic light-bar output is paused while a Bluetooth DS4 interface is present.";
+                lastLightBarError = "";
+                return;
+            }
+
             RgbColor color = LightBarColorPolicy.Resolve(lightBarSettings, state.Percent, state.Charging);
             string key = lightBarSettings.Mode + "|" + color.ToHexString();
             if (!force && StringComparer.Ordinal.Equals(key, lastAppliedLightBarKey))
@@ -758,6 +765,8 @@ namespace DS4BatteryTray
         public bool Connected;
         public int? Percent;
         public bool Approximate;
+        public bool IsBluetooth;
+        public bool UsesExtendedBluetoothInput;
         public string BatteryStatus = "Unknown";
         public bool Charging;
         public string Message = "DS4 controller not connected";
@@ -783,6 +792,8 @@ namespace DS4BatteryTray
             builder.AppendLine("Connected     : " + Connected);
             builder.AppendLine("Percent       : " + (Percent.HasValue ? Percent.Value.ToString() : ""));
             builder.AppendLine("Approximate   : " + Approximate);
+            builder.AppendLine("Bluetooth     : " + IsBluetooth);
+            builder.AppendLine("ExtendedInput : " + UsesExtendedBluetoothInput);
             builder.AppendLine("BatteryStatus : " + BatteryStatus);
             builder.AppendLine("Charging      : " + Charging);
             builder.AppendLine("Message       : " + Message);
@@ -808,6 +819,8 @@ namespace DS4BatteryTray
         public bool ReadBattery;
         public int? Percent;
         public bool Charging;
+        public bool IsBluetooth;
+        public bool UsesExtendedBluetoothInput;
         public string StatusText = "";
         public string Detail = "";
         public string Error = "";
@@ -925,6 +938,8 @@ namespace DS4BatteryTray
             state.Percent = hidResult.Percent;
             state.Approximate = hidResult.Percent.HasValue;
             state.Charging = hidResult.Charging;
+            state.IsBluetooth = hidResult.IsBluetooth;
+            state.UsesExtendedBluetoothInput = hidResult.UsesExtendedBluetoothInput;
             state.BatteryStatus = String.IsNullOrWhiteSpace(hidResult.StatusText)
                 ? (hidResult.Charging ? "Charging" : "Discharging")
                 : hidResult.StatusText;
@@ -1141,6 +1156,9 @@ namespace DS4BatteryTray
                     result.ReadBattery = true;
                     result.Percent = report.Percent;
                     result.Charging = report.Charging;
+                    result.IsBluetooth = info.InputReportByteLength >= Ds4LightBarReportBuilder.BluetoothReportLength &&
+                        info.OutputReportByteLength >= Ds4LightBarReportBuilder.BluetoothReportLength;
+                    result.UsesExtendedBluetoothInput = report.UsesExtendedBluetoothInput;
                     result.StatusText = report.StatusText;
                     result.Detail = String.Format(
                         "Direct HID fallback read {0} report 0x{1:X2} from PID 0x{2:X4}; power byte 0x{3:X2}.",
@@ -1168,6 +1186,24 @@ namespace DS4BatteryTray
 
             result.Error = String.Join(" ", failures.ToArray());
             return result;
+        }
+
+        public static bool HasBluetoothDs4Interface()
+        {
+            foreach (string devicePath in EnumerateHidDevicePaths())
+            {
+                HidDeviceInfo info;
+                string ignoredError;
+                if (TryGetHidDeviceInfo(devicePath, out info, out ignoredError) &&
+                    IsSupportedDs4(info) &&
+                    info.InputReportByteLength >= Ds4LightBarReportBuilder.BluetoothReportLength &&
+                    info.OutputReportByteLength >= Ds4LightBarReportBuilder.BluetoothReportLength)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         internal static bool IsSupportedDs4(HidDeviceInfo info)

@@ -35,6 +35,7 @@ namespace DS4BatteryTray.Tests
             AssertEqual(65, report.Percent, "USB level maps to coarse midpoint");
             AssertEqual(false, report.Charging, "USB report is discharging without cable bit");
             AssertEqual("USB-style", report.ConnectionKind, "USB connection kind");
+            AssertEqual(false, report.UsesExtendedBluetoothInput, "USB-style report is not extended Bluetooth input");
         }
 
         private static void TestBluetoothChargingReport()
@@ -45,6 +46,7 @@ namespace DS4BatteryTray.Tests
             AssertEqual(35, report.Percent, "Bluetooth level maps to coarse midpoint");
             AssertEqual(true, report.Charging, "Bluetooth cable bit maps to charging");
             AssertEqual("Charging", report.StatusText, "Charging status text");
+            AssertEqual(true, report.UsesExtendedBluetoothInput, "Bluetooth 0x11 report is extended input");
         }
 
         private static void TestFullReport()
